@@ -1,0 +1,117 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var PagbilaoBorder = ee.FeatureCollection("users/jeromemaiquez/PagbilaoBorder"),
+    LuzonBorder = ee.FeatureCollection("users/jeromemaiquez/LUZON_SIMPLE"),
+    phPopDen = ee.FeatureCollection("users/jeromemaiquez/phgen20CSV"),
+    phPopDenImg = ee.Image("users/jeromemaiquez/PopDenPhRasterMasked"),
+    rasterBorder = ee.FeatureCollection("users/jeromemaiquez/phl_general_2020_masked_polygon");
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+  // Sample PH Pop. Density raster
+var img = ee.Image(phPopDenImg)
+          .unmask().clip(PagbilaoBorder);
+// var polygon = ee.Geometry.Polygon(PagbilaoBorder);
+// var smallBorder = polygon.buffer(-30);
+// var normalBorder = polygon.serialize();
+
+  // Add input layers to map
+Map.addLayer(img, {}, 'Pagbilao Pop. Density');
+Map.addLayer(PagbilaoBorder, {}, 'Pagbilao Borders');
+          
+// var PagbilaoPopDen = img.sample({
+//   region: PagbilaoBorder, // works with rasterBorder
+//   scale: 30,
+//   numPixels: 200,
+//   geometries: true
+// });
+
+//   // Filter PH Pop Density w/ Pagbilao Border
+// var PagbilaoPopDen = ee.FeatureCollection(phPopDen)
+//                       .filterBounds(PagbilaoBorder)
+//                       .filter(ee.Filter.neq('phl_general_2020', null));
+
+//// Part 1: Inverse Distance Weighing
+////////////////////////////////////////
+  
+//   // Combine mean & stdev reducers for efficiency
+// var combinedReducer = ee.Reducer.mean().combine({
+//   reducer2: ee.Reducer.stdDev(),
+//   sharedInputs: true
+// });
+
+//   // Estimate global mean & stdev from the points
+// var stats = PagbilaoPopDen.reduceColumns({
+//   reducer: combinedReducer,
+//   selectors: ['b1']
+// });
+
+//   // Perform the interpolation, valid to 1 km
+// var interpolated = PagbilaoPopDen.inverseDistance({
+//   range: 5e3,
+//   propertyName: 'b1',
+//   mean: stats.get('mean'),
+//   stdDev: stats.get('stdDev'),
+//   gamma: 1.0
+// }).clip(PagbilaoBorder);
+
+//// Part 2: Kriging
+///////////////////////////////////
+
+// var interpolated = PagbilaoPopDen.kriging({
+//   propertyName: 'b1',
+//   shape: 'gaussian',
+//   range: 1e4,
+//   sill: 10.0,
+//   nugget: 0,
+//   maxDistance: 1e3,
+//   reducer: 'mean'
+// }).clip(PagbilaoBorder);
+
+//// Part 3: Visualization
+/////////////////////////////////
+
+  // Define visualization arguments
+var band_viz = {
+  min: 0,
+  max: 50,
+  palette: ['black', 'white']
+};
+
+  // Display to map
+Map.centerObject(PagbilaoBorder, 12);
+// Map.addLayer(PagbilaoPopDen, {}, 'PopDen Points');
+// Map.addLayer(interpolated, band_viz, 'PopDen Interpolated');
+
+//// Part 3B: Clustering
+////////////////////////////
+
+// var seeds = ee.Algorithms.Image.Segmentation.seedGrid(5);
+
+// var snic = ee.Algorithms.Image.Segmentation.SNIC({
+//   image: img,
+//   compactness: 0.5,
+//   connectivity: 8,
+//   seeds: seeds
+// });
+
+// var clusters = snic.select('clusters');
+// var smoothed = img.addBands(clusters);
+
+// var clusterMajority = smoothed.reduceConnectedComponents({
+//   reducer: ee.Reducer.mode(),
+//   labelBand: 'clusters'
+// }).unmask().clip(PagbilaoBorder);
+
+// Map.addLayer(clusterMajority, {}, 'Processed w/ Clusters')
+
+//// Part 4: Export of Data
+//////////////////////////////
+
+  // exports pop. density raster of Pagbilao
+Export.image.toDrive({
+  image: img,
+  description: 'PagbilaoPopDens',
+  folder: 'MaxEnt',
+  scale: 30,
+  region: PagbilaoBorder,
+  crs: 'EPSG: 32651',
+  maxPixels: 1e9
+});

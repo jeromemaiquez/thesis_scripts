@@ -1,0 +1,388 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var SamplingPts = /* color: #ffffff */ee.Geometry({
+      "type": "GeometryCollection",
+      "geometries": [
+        {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [
+                121.07474603302128,
+                14.646683097974154
+              ],
+              [
+                121.07496060974248,
+                14.637008551099907
+              ],
+              [
+                121.08191289550908,
+                14.636883983336045
+              ],
+              [
+                121.08315744049199,
+                14.647181346341455
+              ]
+            ]
+          ],
+          "evenOdd": true
+        },
+        {
+          "type": "Point",
+          "coordinates": [
+            121.71709303023451,
+            13.948340745934011
+          ]
+        },
+        {
+          "type": "Point",
+          "coordinates": [
+            121.68975595595472,
+            13.95646693407272
+          ]
+        },
+        {
+          "type": "Point",
+          "coordinates": [
+            121.68632272841566,
+            13.96267246980233
+          ]
+        },
+        {
+          "type": "Point",
+          "coordinates": [
+            121.69838194014662,
+            13.963588709243552
+          ]
+        },
+        {
+          "type": "Point",
+          "coordinates": [
+            121.71503309371107,
+            13.975127433090076
+          ]
+        },
+        {
+          "type": "Point",
+          "coordinates": [
+            121.72988180281752,
+            13.968532720556171
+          ]
+        },
+        {
+          "type": "Point",
+          "coordinates": [
+            121.7251611149513,
+            13.977403205391017
+          ]
+        },
+        {
+          "type": "Point",
+          "coordinates": [
+            121.74000982405775,
+            13.971656169686261
+          ]
+        },
+        {
+          "type": "Point",
+          "coordinates": [
+            121.72992471816175,
+            13.981567634363815
+          ]
+        },
+        {
+          "type": "Point",
+          "coordinates": [
+            121.73790697219007,
+            13.97806951909018
+          ]
+        },
+        {
+          "type": "Point",
+          "coordinates": [
+            121.74671074955543,
+            13.968434554158462
+          ]
+        },
+        {
+          "type": "Point",
+          "coordinates": [
+            121.761685035416,
+            13.96159467995299
+          ]
+        },
+        {
+          "type": "Point",
+          "coordinates": [
+            121.76906647462498,
+            13.949349982443653
+          ]
+        },
+        {
+          "type": "Point",
+          "coordinates": [
+            121.78412976045261,
+            13.939492082503207
+          ]
+        },
+        {
+          "type": "Point",
+          "coordinates": [
+            121.79400028962742,
+            13.952736884516584
+          ]
+        },
+        {
+          "type": "Point",
+          "coordinates": [
+            121.78846421022068,
+            13.948780183687244
+          ]
+        },
+        {
+          "type": "Point",
+          "coordinates": [
+            121.79091038484226,
+            13.96194115744761
+          ]
+        },
+        {
+          "type": "Point",
+          "coordinates": [
+            121.74914868659503,
+            13.937903506008682
+          ]
+        },
+        {
+          "type": "Point",
+          "coordinates": [
+            121.75390703709022,
+            13.926495728365706
+          ]
+        },
+        {
+          "type": "Point",
+          "coordinates": [
+            121.75461579295414,
+            13.892016885238718
+          ]
+        },
+        {
+          "type": "Point",
+          "coordinates": [
+            121.74710560771244,
+            13.909430138906194
+          ]
+        },
+        {
+          "type": "Point",
+          "coordinates": [
+            121.77891962565538,
+            13.907028180332736
+          ]
+        },
+        {
+          "type": "Point",
+          "coordinates": [
+            121.78808714152797,
+            13.929039045844911
+          ]
+        },
+        {
+          "type": "Point",
+          "coordinates": [
+            121.68678577331184,
+            13.951127006414035
+          ]
+        },
+        {
+          "type": "Point",
+          "coordinates": [
+            121.69137771514534,
+            13.926552542689118
+          ]
+        }
+      ],
+      "coordinates": []
+    }),
+    ManilaBay = 
+    /* color: #ffffff */
+    /* shown: false */
+    ee.Geometry.Polygon(
+        [[[120.54873549873004, 14.79140711378676],
+          [120.63662612373004, 14.786095918916597],
+          [120.65585330622307, 14.768171495614517],
+          [120.69705092841754, 14.770161554738603],
+          [120.75678908759723, 14.760201983696295],
+          [120.78768895334126, 14.758875447290823],
+          [120.80142147555895, 14.753895145027828],
+          [120.81515395576129, 14.758210014740936],
+          [120.85360610419879, 14.726336031831083],
+          [120.89171206694837, 14.70392323071529],
+          [120.926044342339, 14.674698318758706],
+          [120.948016998589, 14.641483452832697],
+          [120.94389712554212, 14.602947905978755],
+          [120.97273623687025, 14.577696815768721],
+          [120.98234927397962, 14.559088896901248],
+          [120.9754828189015, 14.52319776507638],
+          [120.9754828189015, 14.485971179508775],
+          [120.9535101626515, 14.466025793952245],
+          [120.926044342339, 14.460706721827542],
+          [120.91917788726087, 14.501926196620412],
+          [120.9020112964521, 14.497937828191846],
+          [120.89171206694837, 14.487300808129252],
+          [120.882099029839, 14.463366273810893],
+          [120.86699282866712, 14.43676932197006],
+          [120.849140045464, 14.422139643130933],
+          [120.83952700835462, 14.39952825012564],
+          [120.87523257476087, 14.39553776635598],
+          [120.904071686089, 14.387556584822699],
+          [120.9315375064015, 14.383565887095234],
+          [120.9644964907765, 14.38090538234075],
+          [120.98784243804212, 14.360950587379165],
+          [121.01805484038587, 14.370263046616214],
+          [121.046893951714, 14.379575118084652],
+          [121.05513369780775, 14.398198096796575],
+          [121.05513369780775, 14.444748741544975],
+          [121.0633734439015, 14.485971179508775],
+          [121.08259951812025, 14.515221166475483],
+          [121.11006533843275, 14.533832782380918],
+          [121.134784576714, 14.553772060264263],
+          [121.11967837554212, 14.584342120322193],
+          [121.11418521147962, 14.61756563345176],
+          [121.11555850249525, 14.654770003528428],
+          [121.12517153960462, 14.693296442177155],
+          [121.1402777407765, 14.715877749593975],
+          [121.16087710601087, 14.741112915454316],
+          [121.1512640689015, 14.765017217538146],
+          [121.11967837554212, 14.778296249968152],
+          [121.08946597319837, 14.786263279787036],
+          [121.07023989897962, 14.811490277806524],
+          [121.03453433257337, 14.806179574751013],
+          [121.002948639214, 14.803524174426821],
+          [120.97685610991712, 14.810162614243401],
+          [120.90544497710462, 14.836714339109509],
+          [120.8106878970265, 14.883172012427702],
+          [120.75163638335462, 14.966770582329536],
+          [120.72554385405775, 15.007894431407511],
+          [120.695331451714, 14.962790435853888],
+          [120.651386139214, 14.968097281397544],
+          [120.60881411772962, 14.964117159557034],
+          [120.58409487944837, 14.921657931977519],
+          [120.55525576812025, 14.8924623469036],
+          [120.53190982085462, 14.861935459149679],
+          [120.51268374663587, 14.836714339109509],
+          [120.53190982085462, 14.802196462067933]]]),
+    Sentinel2 = ee.ImageCollection("COPERNICUS/S2_SR"),
+    PagbilaoBay = 
+    /* color: #c9ff9d */
+    /* shown: false */
+    /* displayProperties: [
+      {
+        "type": "rectangle"
+      }
+    ] */
+    ee.Geometry.Polygon(
+        [[[121.68049388901495, 14.004908534695298],
+          [121.68049388901495, 13.872289627685424],
+          [121.80477672592902, 13.872289627685424],
+          [121.80477672592902, 14.004908534695298]]], null, false),
+    soilTexture = ee.Image("ISDASOIL/Africa/v1/texture_class");
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+//this will center the map around an object (i.e. Gesu point)
+//the number that follows represents zoom magnitude/extent
+//smaller = zoomed out; larger = zoomed in (only up to ~27)
+Map.centerObject(PagbilaoBay, 12);
+
+//to center around coordinates, use Map.setCenter(x, y, zoom)
+//Map.setCenter(121.08, 14.64, 15);
+
+//image collections: satellite datasets composed of images at diff. times & locations
+//"COPERNICUS/S2_SR" is the ImageCollection ID for the Copernicus program's Sentinel 2 satellite
+//this ID can be manually searched by putting "Sentinel 2" in search bar, 
+//and choosing Sentinel-2 MSI: Multi-Spectral Instrument, Level-2A
+
+
+//this filters Sentinel2 data using 3 criteria
+//1: cloudy pixel percentage (20 is acceptable double value)
+//2: date (year-month-date) (start to end)
+//3: bounds(extent): image that includes Gesu point
+
+var filtered = Sentinel2
+  .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20))
+  .filter(ee.Filter.date('2019-01-01', '2020-01-01'))
+  .filter(ee.Filter.bounds(PagbilaoBay))
+  .map(function(image){return image.clip(PagbilaoBay)})
+  .median();
+  
+//shows number of images in collection that fit criteria
+//print(filtered.size());
+
+//shows all info re: filtered image collection
+//print(filtered);
+
+//defines visualization parameters of map layer to be retrieved
+//bands 4 (red), 3 (green), and 2 (blue)
+var rgbVis = {
+  min: 0.0,
+  max: 3000,
+  bands: ['B4', 'B3', 'B2'],
+};
+
+Map.addLayer(filtered, rgbVis, 'Pagbilao Bay RGB - Median');
+
+/////////////////////////////////
+// ATTEMPT 1 at calculating MVI//
+// image.expression()          //
+/////////////////////////////////
+
+//var image = filtered;
+
+//var mvi = image.expression('(NIR - GREEN) / (SWIR - GREEN)', {
+//  'NIR': image.select('B5'),
+//  'GREEN': image.select('B3'),
+//  'SWIR': image.select('B11')
+//});
+
+//Map.addLayer(mvi, {min: -1, max: 1, palette: ['black', 'white', 'blue']});
+
+/////////////////////////////////
+// ATTEMPT 2 at calculating MVI//
+// manual operators            //
+/////////////////////////////////
+
+//lesson: can't use operators on image collections, dapat one image lang
+
+var green = filtered.select('B3');
+var nir = filtered.select('B8');
+var swir = filtered.select('B11');
+
+var mvi = nir.subtract(green).divide(swir.subtract(green));
+Map.addLayer(mvi, {min: 4.5, max: 11, color: 'green'}, 'Pagbilao Bay MVI');
+
+//adds RGB layer onto mapping interface
+//3 parameters: filtered image collection, bands retrieved, caption of layer
+//Map.addLayer(filtered, rgbVis, 'Filtered RGB');
+
+////visualizing soil texture
+
+// var soilTextClipped = soilTexture.clip(PagbilaoBay);
+
+// var visualization = {
+//   bands: ['texture_0_20'],
+//   min: 1.0,
+//   max: 12.0,
+//   palette: [
+//     "d5c36b","b96947","9d3706","ae868f","f86714","46d143",
+//     "368f20","3e5a14","ffd557","fff72e","ff5a9d","ff005b",
+//   ]
+// };
+
+// Map.addLayer(soilTextClipped, visualization, "Pagbilao Bay Soil Texture");
+
+////exporting sample points
+
+Export.table.toDrive({
+    collection: SamplingPts,
+    description: 'Mangrove Occurrence Points',
+    fileFormat: 'SHP'
+});

@@ -1,0 +1,132 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var PagbilaoUnion = ee.FeatureCollection("users/jeromemaiquez/Pagbilao_Border_Bay"),
+    RoadsProx = ee.Image("users/jeromemaiquez/PagbilaoRoadsProximity"),
+    PagbilaoBorder = ee.FeatureCollection("users/jeromemaiquez/PagbilaoBorder"),
+    CoastProx = ee.Image("users/jeromemaiquez/PagbilaoCoastProx"),
+    RiversProx = ee.Image("users/jeromemaiquez/PagbilaoRiversProximity");
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+  // Adding DEM data from USGS SRTM
+  // clip slope to PagbilaoUnion bounding box + 50m buffer for export
+  // then clip to PagbilaoUnion IN QGIS to prevent errors
+var srtm = ee.Image("USGS/SRTMGL1_003");
+var elevation = srtm.select('elevation').clip(PagbilaoUnion);
+var slopeBuffer = ee.Terrain.slope(srtm.select('elevation')).rename('slope');
+var slope = slopeBuffer.clip(PagbilaoUnion.geometry().bounds().buffer(50));
+
+  // Add layers to map
+Map.centerObject(PagbilaoUnion);
+Map.addLayer(elevation, {min: 0, max: 311, palette: ['black', 'white']}, 'Pagbilao Elevation', 0);
+Map.addLayer(slope, {min:0, max: 30, palette: ['green', 'red']}, 'Pagbilao Slope', 0);
+
+  //exports slope of Pagbilao
+Export.image.toDrive({
+  image: slope,
+  description: 'NewerPagbilaoSlope',
+  folder: 'Thesis Trial Files',
+  scale: 30,
+  region: PagbilaoUnion,
+  crs: 'EPSG: 32651',
+  maxPixels: 1e9
+});
+
+  // Find resolution of original road prox raster
+var roadBand = RoadsProx.select('b1');
+var oldRes = roadBand.projection().nominalScale();
+print('Original Resolution', oldRes);
+
+  // Resample image to 30m/pixel
+var roadBandResampled = roadBand.resample('bilinear')
+                        .reproject({
+                          crs: srtm.projection(),
+                          scale: 30
+                        });
+                        
+  // Confirm resolution of resampled prox raster
+var newRes = roadBandResampled.projection().nominalScale();
+print ('New Resolution', newRes);
+
+  // Clip resampled image and add to map
+var PagbilaoRoadsProximity = roadBandResampled.float()
+                             .clip(PagbilaoBorder).unmask(0.05)
+                             .clip(PagbilaoUnion.geometry().bounds().buffer(50));
+Map.addLayer(RoadsProx, {min: 0.00, max: 0.05}, 'OG Roads Prox');
+Map.addLayer(PagbilaoRoadsProximity, {min: 0.00, max: 0.05}, 'Proximity to Roads');
+
+  // Export resampled road-prox raster of Pagbilao
+Export.image.toDrive({
+  image: PagbilaoRoadsProximity,
+  description: 'PagbilaoRoadsProximity',
+  folder: 'Thesis Trial Files',
+  scale: 30,
+  region: PagbilaoUnion,
+  crs: 'EPSG: 32651',
+  maxPixels: 1e9
+});
+
+  // Find resolution of original road prox raster
+var coastBand = CoastProx.select('b1');
+var oldRes = coastBand.projection().nominalScale();
+print('Original Resolution', oldRes);
+
+  // Resample image to 30m/pixel
+var coastBandResampled = coastBand.resample('bilinear')
+                        .reproject({
+                          crs: srtm.projection(),
+                          scale: 30
+                        });
+                        
+  // Confirm resolution of resampled prox raster
+var newRes = coastBandResampled.projection().nominalScale();
+print ('New Resolution', newRes);
+
+  // Clip resampled image and add to map
+var PagbilaoCoastProximity = coastBandResampled.float()
+                             /*.clip(PagbilaoBorder).unmask()*/
+                             .clip(PagbilaoUnion.geometry().bounds().buffer(50));
+Map.addLayer(CoastProx, {min: 0.00, max: 0.05}, 'OG Coast Prox');
+Map.addLayer(PagbilaoCoastProximity, {min: 0.00, max: 0.03}, 'Proximity to Coast');
+
+  // Export resampled road-prox raster of Pagbilao
+Export.image.toDrive({
+  image: PagbilaoCoastProximity,
+  description: 'PagbilaoCoastProximity',
+  folder: 'Thesis Trial Files',
+  scale: 30,
+  region: PagbilaoUnion,
+  crs: 'EPSG: 32651',
+  maxPixels: 1e9
+});
+
+  // Find resolution of original road prox raster
+var riversBand = RiversProx.select('b1');
+var oldRes = riversBand.projection().nominalScale();
+print('Original Resolution', oldRes);
+
+  // Resample image to 30m/pixel
+var riversBandResampled = riversBand.resample('bilinear')
+                        .reproject({
+                          crs: srtm.projection(),
+                          scale: 30
+                        });
+                        
+  // Confirm resolution of resampled prox raster
+var newRes = riversBandResampled.projection().nominalScale();
+print ('New Resolution', newRes);
+
+  // Clip resampled image and add to map
+var PagbilaoRiversProximity = riversBandResampled.float()
+                             .clip(PagbilaoBorder).unmask(0.05)
+                             .clip(PagbilaoUnion.geometry().bounds().buffer(50));
+Map.addLayer(RiversProx, {min: 0.00, max: 0.05}, 'OG River Prox');
+Map.addLayer(PagbilaoRiversProximity, {min: 0.00, max: 0.05}, 'Proximity to River');
+
+  // Export resampled road-prox raster of Pagbilao
+Export.image.toDrive({
+  image: PagbilaoRiversProximity,
+  description: 'PagbilaoRiversProximity',
+  folder: 'Thesis Trial Files',
+  scale: 30,
+  region: PagbilaoUnion,
+  crs: 'EPSG: 32651',
+  maxPixels: 1e9
+});

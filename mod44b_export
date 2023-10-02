@@ -1,0 +1,29 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var mod44b = ee.ImageCollection("MODIS/006/MOD44B"),
+    gaul0 = ee.FeatureCollection("FAO/GAUL/2015/level0");
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+var phBorders = gaul0
+        .filter(ee.Filter.eq('ADM0_NAME', 'Philippines'));
+
+var treeCoverPh = mod44b
+    .filterDate('2020-01-01', '2021-01-01')
+    .select('Percent_Tree_Cover')
+    .mean()
+    .clip(phBorders);
+
+Map.centerObject(phBorders);
+Map.addLayer(treeCoverPh, {
+    min: 0,
+    max: 100,
+    palette: ['white', 'green']
+}, 'Tree Cover Philippines');
+
+Export.image.toDrive({
+    image: treeCoverPh,
+    description: 'Tree_Cover_PH',
+    folder: 'Google Earth Engine',
+    region: phBorders.geometry(),
+    scale: 250,
+    crs:'EPSG:4326',
+    maxPixels: 1e9
+});

@@ -1,0 +1,170 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var pagbilaoBox = 
+    /* color: #d63000 */
+    /* shown: false */
+    ee.Geometry.Polygon(
+        [[[121.64052231985089, 14.10516399987321],
+          [121.64258225637433, 13.899295118609588],
+          [121.73836860188406, 13.901647298829765],
+          [121.8444560356712, 13.900628195053194],
+          [121.84376939016339, 14.104498055717503]]]),
+    mod44b = ee.ImageCollection("MODIS/006/MOD44B"),
+    l8 = ee.ImageCollection("LANDSAT/LC08/C02/T1_L2"),
+    dem = ee.Image("USGS/SRTMGL1_003"),
+    gaul2 = ee.FeatureCollection("FAO/GAUL_SIMPLIFIED_500m/2015/level2");
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+/* REGRESSION TRIAL */
+/* LANDSAT 8 VS. MODIS TREE COVER */
+
+  // import FAO GAUL 2nd-lvl admin boundaries
+  // and filter to extract quezon province
+var quezon = gaul2
+    .filter(ee.Filter.and(
+        ee.Filter.eq('ADM0_NAME', 'Philippines'),
+        ee.Filter.eq('ADM2_NAME', 'Quezon')));
+
+  // add quezon feature to map
+Map.addLayer(quezon, {}, 'Quezon Province', 0);
+
+  // dependent variable: tree cover
+  // filter mod44b collection by year (21-22)
+  // get first image then clip to pagbilaoBox
+  // then select Percent_Tree_Cover
+var treeCover21 = mod44b
+    .filterDate('2020-01-01', '2021-01-01')
+    .first()
+    .clip(pagbilaoBox)
+    .select('Percent_Tree_Cover')
+    .unmask(0);
+  
+  // add layer to inspect
+Map.addLayer(treeCover21, {
+    min: 0,
+    max: 100,
+    palette: ['white', 'green']
+}, '% Tree Cover', 0)
+
+  // list landsat bands to be used
+  // RGB, NIR, and SWIR1/2
+var l8bands = ['SR_B2', 'SR_B3', 'SR_B4',
+    'SR_B5', 'SR_B6', 'SR_B7'];
+
+  // Function to cloud mask from QA_PIXEL band of Landsat 8 SR data
+  // Bits 3 and 4 are cloud shadow and cloud, respectively
+function maskL8sr(image) {
+  var cloudShadowBitMask = 1 << 4;
+  var cloudsBitMask = 1 << 3;
+  
+  var qa = image.select('QA_PIXEL');
+  
+  var mask = qa.bitwiseAnd(cloudShadowBitMask).eq(0)
+    .and(qa.bitwiseAnd(cloudsBitMask).eq(0));
+    
+  return image.updateMask(mask).divide(10000)
+    .select(l8bands)
+    .copyProperties(image, ["system:time_start"]);
+}
+    
+  // independent variable: landsat reflectance
+  // filter l8 by loc: pagbilaoBox centroid
+  // and by date: 2020-2022
+  // extract only the bands listed previously
+  // then get median to limit cloud cover
+var landsat = l8
+    .filterBounds(quezon.geometry()
+        .bounds({'maxError': 5}))
+    .filterDate('2020-01-01', '2021-12-31')
+    .map(maskL8sr)
+    .median();
+
+  // get good footprint from 1 landsat image
+var landsatGeom = l8
+    .filterBounds(quezon.geometry()
+        .bounds({'maxError': 5}))
+    .filterDate('2019-01-01', '2021-12-31')
+    .geometry().dissolve();
+
+  // display landsat footprint to inspect     
+Map.addLayer(landsatGeom, 
+    {}, 'Landsat Footprint', 0);
+
+  // add landsat layer to map to inspect
+Map.addLayer(landsat, {
+    bands: ['SR_B4', 'SR_B3', 'SR_B2'],
+    min: 0,
+    max: 1.7
+}, 'Landsat 8 SR Image', 0);
+
+  // independent variable: topography
+  // aka elevation, slope, aspect
+  // to account for effect on reflectance
+var elevation = dem
+    .select('elevation')
+    .clip(landsatGeom);
+var slope = ee.Terrain.slope(elevation);
+var aspect = ee.Terrain.aspect(elevation);
+
+  // assemble training dataset for RF
+  // ind-vars first before dep-var
+var trainImgRF = ee.Image(landsat)
+    .addBands(elevation)
+    .addBands(slope)
+    .addBands(aspect)
+    .addBands(treeCover21);
+
+  // put ind-var band names in a list
+  // as input for RF regression training
+var trainBands = trainImgRF.bandNames();
+  
+  // now sample image stack to create
+  // feature collection of training data
+var trainPtsRF = trainImgRF
+.sample({
+    region: pagbilaoBox,
+    scale: 30,
+    numPixels: 3000,
+    seed: 1
+});
+
+  // examine RF training data
+print('RF Training Data', trainPtsRF);
+
+  // run RF regression (100 trees)
+  // setOutputMode('REGRESSION')
+  // train() parameters:
+  // features, classProperty, inputProperties
+var rfReg = ee.Classifier.smileRandomForest(100)
+    .setOutputMode('REGRESSION')
+    .train({
+        features: trainPtsRF,
+        classProperty: 'Percent_Tree_Cover',
+        inputProperties: trainBands
+    });
+
+  // now predict for whole image
+  // then display results
+var rfRegImage = trainImgRF
+    .select(trainBands)
+    .classify(rfReg, 'rfReg')
+    .clip(quezon);
+Map.addLayer(rfRegImage, {
+    min: 0,
+    max: 100,
+    palette: ['white', 'green']
+}, 'RF Regression', 0);
+
+//   // extract projection info of image
+// var proj = rfRegImage
+//     .projection()
+//     .getInfo();
+
+//   // export final result to gdrive
+// Export.image.toDrive({
+//     image: rfRegImage,
+//     description: 'Tree Cover Percent Quezon',
+//     scale: 30,
+//     crs: proj.crs,
+//     crsTransform: proj.transform,
+//     region: quezon.geometry(),
+//     maxPixels: 1e9
+// })

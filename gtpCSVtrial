@@ -1,0 +1,11 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var testGtp = ee.FeatureCollection("users/jeromemaiquez/test-gtp"),
+    gtp = ee.FeatureCollection("users/jeromemaiquez/gtpReal");
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+Map.addLayer(gtp, {color: 'black'}, 'GT Pts');
+Map.centerObject(gtp, 12);
+print(gtp);
+
+Map.addLayer(testGtp, {color: 'red'}, 'Test GT Pts');
+Map.centerObject(testGtp, 12);
+print(testGtp);

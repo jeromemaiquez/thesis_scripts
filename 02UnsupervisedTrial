@@ -1,0 +1,64 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var PagbilaoBorder = ee.FeatureCollection("users/jeromemaiquez/PagbilaoBorder");
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+////***** Part 1: Adding imagery, filtering to area and date range, 
+////***** masking out clouds, and making a composite
+/////////////////////////////////////////////////////////////////////
+
+  // Insert Landsat Image Collection and filter 
+  // by area using imported Pagbilao shapefile
+var image = ee.ImageCollection('LANDSAT/LE07/C02/T1_L2')
+  .filterBounds(PagbilaoBorder);
+  
+Map.centerObject(PagbilaoBorder);
+
+  // A function that scales and masks Landsat 6 (C2) surface reflectance images.
+function prepSrL7(image) {
+   // Develop masks for unwanted pixels (fill, cloud, cloud shadow).
+  var qaMask = image.select('QA_PIXEL').bitwiseAnd(parseInt('11111', 2)).eq(0);
+  var saturationMask = image.select('QA_RADSAT').eq(0);
+
+  // Apply the scaling factors to the appropriate bands.
+  var getFactorImg = function(factorNames) {
+    var factorList = image.toDictionary().select(factorNames).values();
+    return ee.Image.constant(factorList);
+  };
+  var scaleImg = getFactorImg([
+    'REFLECTANCE_MULT_BAND_.|TEMPERATURE_MULT_BAND_ST_B6']);
+  var offsetImg = getFactorImg([
+    'REFLECTANCE_ADD_BAND_.|TEMPERATURE_ADD_BAND_ST_B6']);
+  var scaled = image.select('SR_B.|ST_B6').multiply(scaleImg).add(offsetImg);
+
+  // Replace original bands with scaled bands and apply masks.
+  return image.addBands(scaled, null, true)
+    .updateMask(qaMask).updateMask(saturationMask)
+    .select("SR_B[0-5]*", "SR_B7", "ST_B6");
+}
+
+// Landsat 7 Collection 2 surface reflectance images of interest.
+var composite = image
+  .filterDate('2002-01-01', '2002-12-31')
+  .map(prepSrL7)
+  // .select('SR.*')
+  .median()
+  .clip(PagbilaoBorder);
+
+// Display the cloud-free median composite.
+Map.addLayer(composite, {bands: ['SR_B3', 'SR_B2', 'SR_B1'], min: 0.01, max: 0.2 }, 'Pagbilao Color Image 2002', 0);  
+  
+  // Create training dataset
+var training = composite.sample({
+  region: PagbilaoBorder,
+  scale: 30,
+  numPixels: 1000
+});
+
+  // Instantiate the clusterer and train it
+var clusterer = ee.Clusterer.wekaKMeans(9).train(training);
+
+  // Cluster the input using trained clusterer
+var result = composite.cluster(clusterer);
+print("result", result.getInfo());
+
+  // Display the clusters with random colors
+Map.addLayer(result.clip(PagbilaoBorder).randomVisualizer(), {}, 'Unsuperv. Clusters Pagbilao 2002', 0)

@@ -1,0 +1,51 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var PagbilaoBorder = ee.FeatureCollection("users/jeromemaiquez/PagbilaoBorder"),
+    PagbilaoUnion = ee.FeatureCollection("users/jeromemaiquez/Pagbilao_Border_Bay"),
+    PagbilaoTWI = ee.Image("users/jeromemaiquez/PagbilaoTWI");
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+var dataset = ee.Image("MERIT/Hydro/v1_0_1");
+
+var visualization = {
+  bands: ['upa'],
+};
+
+Map.centerObject(PagbilaoBorder);
+
+Map.addLayer(dataset.clip(PagbilaoBorder), visualization, "90m Upstream Drainage Area");
+var oldRes = dataset.projection().nominalScale();
+print('Orig Resol', oldRes);
+
+var dataResample = dataset.resample('bilinear')
+                   .reproject({
+                     crs: 'EPSG: 32651',
+                     scale: 30
+                   });
+
+Map.addLayer(dataResample.clip(PagbilaoBorder), visualization, "30m Upstream Drainage Area");
+var newRes = dataResample.projection().nominalScale();
+print('New Resol', newRes);
+
+var PagbilaoUpstream = dataResample
+                      .float().unmask()
+                      .clip(PagbilaoUnion);
+                      
+Map.addLayer(PagbilaoUpstream, visualization, "30m Upstream Drainage w/ Bay")
+
+var PagbilaoTWIBay = PagbilaoTWI.resample('bilinear')
+                     .reproject({
+                       crs: 'EPSG: 32651',
+                       scale:30
+                     }).float().unmask()
+                     .clip(PagbilaoUnion.geometry().buffer(100));
+                    
+Map.addLayer(PagbilaoTWIBay, {}, 'Pagbilao TWI') ;                   
+                    
+Export.image.toDrive({
+  image: PagbilaoTWIBay, 
+  description: 'PagbilaoTWIBay', 
+  folder: 'Inputs for Myka', 
+  region: PagbilaoUnion.geometry().buffer(100), 
+  scale: 30, 
+  crs: 'EPSG: 32651', 
+  maxPixels: 1e6
+});

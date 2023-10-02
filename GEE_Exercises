@@ -1,0 +1,257 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var Gesu = 
+    /* color: #a8cfd6 */
+    /* shown: false */
+    ee.Geometry.Point([121.07966595982145, 14.64016541588911]),
+    ADMU_Campus = 
+    /* color: #041dff */
+    /* shown: false */
+    /* displayProperties: [
+      {
+        "type": "rectangle"
+      }
+    ] */
+    ee.Geometry.Polygon(
+        [[[121.07447820090869, 14.64711321890922],
+          [121.07447820090869, 14.634199912513282],
+          [121.08263211631396, 14.634199912513282],
+          [121.08263211631396, 14.64711321890922]]], null, false),
+    Siquijor = 
+    /* color: #068b0d */
+    /* shown: false */
+    /* displayProperties: [
+      {
+        "type": "rectangle"
+      }
+    ] */
+    ee.Geometry.Polygon(
+        [[[123.44793375440109, 9.3183179006142],
+          [123.44793375440109, 9.074302984698898],
+          [123.70611246533859, 9.074302984698898],
+          [123.70611246533859, 9.3183179006142]]], null, false),
+    Luzon = ee.FeatureCollection("users/jeromemaiquez/LUZON_SIMPLE"),
+    Visayas = ee.FeatureCollection("users/jeromemaiquez/VISAYAS_SIMPLE"),
+    Mindanao = ee.FeatureCollection("users/jeromemaiquez/MINDANAO_SIMPLE");
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+/*************************************************/
+/*-----EXERCISE 5: INTRO TO GEE & JAVASCRIPT-----*/
+/*************************************************/
+
+// //this is a comment; guides your script
+// //semi-colons are periods in javascript, 
+// //DONT FORGET TO PUT EM
+// print('Hello Philippines');
+
+// //string: variable that stores a name
+// var city = 'Quezon City';
+// var region = 'National Capital Region';
+// var country = 'Philippines';
+// print(city, region, country);
+
+// //variable storing a number
+// //and printing it with a caption
+// var PH2019_population = 108100000;
+// print(PH2019_population, '2019 Philippine Population');
+
+// //list/array: stores a list of values for 1 variable
+// var NCRCities = ['Makati', 'Manila', 'Mandaluyong'];
+// print(NCRCities);
+
+// //objects: things w/ properties and methods
+//   //properties: diff. variables in an object
+//   //methods: actions done on an object
+// //linebreaks & spacing not important
+// //to refer to specific property: "variable.property"
+// var cityData = {
+//   'city': city,
+//   'population': 2936000,
+//   'elevation': 17
+// };
+// print(cityData.city);
+
+//function: set of operations
+    //takes a parameter that tells what to do
+    //"function(parameter)"
+// here, parameter is 'name'
+//'name' specified as 'Philippines'
+// var greet = function(name){
+//   return 'Hello ' + name + '!';
+// };
+// print(greet('Philippines'));
+
+// //function example 2
+// //2 parameters: a & b
+// var introduction = function(a,b){
+//   return 'I live in ' + a + '. I was born in ' + b + '.';
+// };
+// print(introduction('Quezon City', 'the Philippines'));
+
+/****************************************************/
+/*-----EXERCISE 6: IMAGE COLLECTION & FILTERING-----*/
+/****************************************************/
+
+// //centers map around object ("Gesu")
+// //number represents zoom magnitude
+// //bigger number = more zoomed in
+// Map.centerObject(Gesu, 15);
+
+// //variable "Sentinel2" as image collection
+//     //image collection = satellite images at diff. times & locations
+//     //"COPERNICUS/S2_SR" is ImageCollection ID 
+//     //for Copernicus Program's Sentinel-2 satellite
+// //"ee.": Earth Engine container
+//     //defines a variable containing specific dataset
+//     //in this case, an image collection
+// var Sentinel2 = ee.ImageCollection("COPERNICUS/S2_SR");
+
+// //filters collection "Sentinel 2" according to 3 criteria
+//     //a) cloudy pixel % (acceptable value = 20)
+//     //b) date (year-month-date)
+//     //c) bounds (all images that include the geometry)
+// //"CLOUDY_PIXEL_PERCENTAGE" is a property of image collection
+//     //data type is DOUBLE (can take decimal values)
+//     //we want as few clouds as possible
+// var filtered = Sentinel2
+//   .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20))
+//   .filter(ee.Filter.date('2019-01-01', '2020-01-01'))
+//   .filter(ee.Filter.bounds(ADMU_Campus))
+
+// //clips filtered collection based on polygon (ADMU Campus)
+//   .map(function(image){return image.clip(ADMU_Campus)});
+
+// //shows all info about filtered image collection
+// print(filtered);
+
+// //defines parameters to visualize map layer of image
+// //bands 4, 3 and 2: red, green, and blue
+// var rgbVis = {
+//   min: 0.0,
+//   max: 3000,
+//   bands: ['B4', 'B3', 'B2']
+// };
+
+// //then adds layer onto map, w/ caption
+// //3 parameters
+//     //filtered: the filtered image collection
+//     //rgbVis: band visualization parameters
+//     //caption of layer
+// Map.addLayer(filtered, rgbVis, 'Filtered RGB');
+
+/*************************************************/
+/*-----EXERCISE 7: COMPOSITING & BAND COMBOS-----*/
+/*************************************************/
+
+// //centers map around Siquijor
+// Map.centerObject(Siquijor, 10);
+
+// //imports image collection for Siquijor
+// var Sentinel2 = ee.ImageCollection("COPERNICUS/S2_SR");
+
+// //filters image collection for Siquijor
+// //first year range: Jan 1, 2019 to Oct 10, 2019
+// var filtered19 = Sentinel2
+//   .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20))
+//   .filter(ee.Filter.date('2019-01-01', '2019-10-10'))
+//   .filter(ee.Filter.bounds(Siquijor))
+//   .map(function(image){return image.clip(Siquijor)});
+
+// //second year range: Jan 1, 2021 to Oct 10, 2021
+// var filtered21 = Sentinel2
+//   .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20))
+//   .filter(ee.Filter.date('2021-01-01', '2021-10-10'))
+//   .filter(ee.Filter.bounds(Siquijor))
+//   .map(function(image){return image.clip(Siquijor)});
+
+// //shows no. of images that fit filters
+// print(filtered19.size());
+// print(filtered21.size());
+
+// //composite: combination of multiple satellite images
+//     //mean: calculates mean of all values per pixel (average)
+//     //median: median of all values per pixel (middle value)
+// var meanComposite19 = filtered19.mean();
+// var medianComposite19 = filtered19.median();
+// var meanComposite21 = filtered21.mean();
+// var medianComposite21 = filtered21.median();
+
+// //adds viz parameters and 2 map layers
+// //captioned accordingly (mean vs. median)
+// //median often preferred (insensitive to extremes)
+// var rgbVis = {
+//   min: 0.0,
+//   max: 3000,
+//   bands: ['B4', 'B3', 'B2']
+// };
+// //Map.addLayer(meanComposite19, rgbVis, 'Filtered RGB-Mean');
+// Map.addLayer(medianComposite19, rgbVis, 'Filtered RGB - 2019');
+// Map.addLayer(medianComposite21, rgbVis, 'Filtered RGB - 2021');
+
+// //non-RGB images called "false color images"
+// //can reveal hidden characteristics of area
+// //example: NIR-R-G (for health of vegetation)
+// //redder = denser vegetation; greener = sparser
+// var nirrgVis = {
+//   min: 0.0,
+//   max: 3000,
+//   bands: ['B8', 'B4', 'B3']
+// };
+// Map.addLayer(medianComposite19, nirrgVis, 'Filtered NIR-R-G - 2019');
+// Map.addLayer(medianComposite21, nirrgVis, 'Filtered NIR-R-G - 2021');
+
+// //false color example 2: agriculture (B11-B8-B2)
+// //emphasizes crop health
+// //dark green = dense vegetation
+// var agriculture = {
+//   min: 0.0,
+//   max: 3000,
+//   bands: ['B11', 'B8', 'B2']
+// };
+// Map.addLayer(medianComposite19, agriculture, 'Filtered SWIR1-NIR-B - 2019');
+// Map.addLayer(medianComposite21, agriculture, 'Filtered SWIR1-NIR-B - 2021');
+
+/***********************************************************/
+/*-----EXERCISE 8: IMPORTING, CLIPPING, EXPORTING DATA-----*/
+/***********************************************************/
+
+//centers map around Siquijor
+Map.centerObject(Mindanao, 7);
+
+//imports image collection for Siquijor
+var Sentinel2 = ee.ImageCollection("COPERNICUS/S2_SR");
+
+//filters image collection for Siquijor
+//first year range: Jan 1, 2019 to Oct 10, 2019
+var filtered = Sentinel2
+  .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20))
+  .filter(ee.Filter.date('2019-01-01', '2019-12-31'))
+  .filter(ee.Filter.bounds(Mindanao))
+  .map(function(image){return image.clip(Mindanao)});
+
+//median composite of all PH territory
+var medianComposite = filtered.median();
+
+//visualizing RGB bands of all PH territory
+var rgbVis = {
+  min: 0.0,
+  max: 3000,
+  bands: ['B4', 'B3', 'B2']
+};
+//Map.addLayer(medianComposite, rgbVis, 'Filtered RGB - Luzon (Median)');
+
+//visualizes median composite layer of all PH
+var visualizedRGB = medianComposite.visualize(rgbVis);
+
+//exports RGB image of all PH for use outside GEE
+Export.image.toDrive({
+  image: visualizedRGB,
+  description: 'Sentinel2_Mindanao_VizRGB',
+  folder: 'GEE Exercises',
+  scale: 1000,
+  region: Mindanao,
+  crs: 'EPSG: 32651',
+  maxPixels: 1e9
+});
+
+/**********************************************************/
+/*-----EXERCISE 9: CALCULATING REMOTE SENSING INDICES-----*/
+/**********************************************************/

@@ -1,0 +1,127 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var pagbilao = ee.FeatureCollection("users/jeromemaiquez/Pagbilao_Border_Bay"),
+    l8 = ee.ImageCollection("LANDSAT/LC08/C02/T1_L2");
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+  // get centroid of pagbilao border w/ bay
+  // to use in filtering image collection
+  // cast pagbilao (feature collection)
+  // as geometry to allow use of centroid()
+var pt = pagbilao.geometry()
+    .centroid(1);
+
+  // define function to mask clouds
+function maskL8sr(image) {
+    // create masks for cloud & cloud shadow
+    // bits 3 & 4 are cloud shadow & cloud
+    var cloudShadowBitMask = 1 << 4;
+    var cloudBitMask = 1 << 3;
+    
+    // select quality band
+    var qa = image.select('QA_PIXEL');
+    
+    // apply mask to QA band
+    var mask = qa
+        .bitwiseAnd(cloudShadowBitMask).eq(0)
+        .and(qa
+            .bitwiseAnd(cloudBitMask).eq(0));
+    
+    // return image w/ updated mask
+    return image
+        .updateMask(mask)
+        .divide(10000)
+        .select("SR_B[2-7]")
+        .copyProperties(
+            image,
+            ["system:time_start"]);
+    
+}
+
+  // apply date & loc filters to collection
+  // then apply cloud mask & median
+  // then normalize by scaling to (0,2)
+  // then clip to pagbilao polygon
+var image = l8
+    .filterBounds(pt)
+    .filterDate('2020-01-01', '2020-12-31')
+    .map(maskL8sr)
+    .median()
+    .unitScale(0, 2)
+    .clip(pagbilao);
+Map.centerObject(pagbilao);
+print('Basic Composite', image);
+
+  // define different band composites
+  // to facilitate switching
+var rgbComp = ['SR_B4', 'SR_B3', 'SR_B2'];
+var nirComp = ['SR_B5', 'SR_B4', 'SR_B3'];
+var swirComp = ['SR_B7', 'SR_B5', 'SR_B4'];
+
+  // display composite
+Map.addLayer(image, {
+    bands: rgbComp,
+    min: 0.3, // adjust per composite
+    max: 0.6  // use 98% stretch
+}, 'Base Composite');
+
+  // create seed grid for SNIC
+  // superpixel size=16; grid type=square
+var seeds = ee.Algorithms.Image.Segmentation
+.seedGrid({
+    size: 16,
+    gridType: 'square'
+});
+
+  // instantiate & apply SNIC clusterer
+  // same superpixel size, connectivity=8
+  // compactness=0 to disable spatial weighting
+  // seeds=seeds (defined above)
+  // then reproject to crs & scale=30
+var snic = ee.Algorithms.Image.Segmentation
+    .SNIC({
+    image: image,
+    size: 16,
+    compactness: 0.2,
+    connectivity: 8,
+    seeds: seeds
+ }).reproject(
+        'EPSG:3857', null, 30);
+print('SNIC Results:', snic);
+
+  // define fxn to add '_mean' to band names
+function addMean(i){
+    return i + '_mean';
+}
+
+  // select mean bands from SNIC output
+  // list of band selectors + list of names
+var clustered = snic
+    .select("SR_B[2-7]_mean");
+
+  // then display segmented image
+  // for bands, apply addMean to list
+Map.addLayer(clustered, {
+    bands: rgbComp.map(addMean),
+    min: 0.3,
+    max: 0.6
+}, 'Segmented Composite');
+
+  // make new sample set w input=clustered
+var training = clustered.sample({
+    region: pagbilao,
+    scale: 30,
+    numPixels: 1000
+});
+
+  // train k-means clusterer on clustered
+  // no. of clusters = 9 (for now)
+var kMeans = ee.Clusterer.wekaKMeans({
+    nClusters: 9,
+    seed: 10
+}).train(training);
+
+  // now apply k-means to SNIC output
+var finalKMeans = clustered
+    .cluster(kMeans);
+Map.addLayer(finalKMeans.randomVisualizer(),
+    {}, 'K-Means Classification');
+print('K-Means Results', finalKMeans);

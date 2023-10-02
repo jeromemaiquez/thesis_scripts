@@ -1,0 +1,40 @@
+  // import VIIRS annual composites dataset
+var dataset = ee.ImageCollection('NOAA/VIIRS/DNB/ANNUAL_V21');
+
+  // create list of years (3-yr interval)
+var yearList = ee.List([2015, 2018, 2021]);
+
+  // function to filter VIIRS data by year
+  // for each img: YYYY-01-01 to YYYY-01-01
+  // expected output: list of images
+  // convert collections to image via toBands()
+var importViirs = function(year){
+    var yearFilter = ee.Filter.calendarRange(year, year, 'year')
+    var viirsYear = dataset.filter(yearFilter);
+    return viirsYear.select('median').toBands();
+}
+
+  // apply import function to year list
+  // to get list of images, then reverse
+  // first = latest image, last = earliest
+var viirsList = yearList
+    .map(importViirs)
+    .reverse();
+
+  // convert list of images to collection
+  // via fromImages() method
+  // then flatten to multi-band image
+  // via toBands() method
+var viirs = ee.ImageCollection
+    .fromImages(viirsList).toBands();
+
+  // print to check properties
+print(viirs);
+
+  // add multi-band image to map
+  // red = '21, green = '18, blue = '15
+  // yellow = 18-21, cyan = 15-18, white = ALL
+Map.addLayer(viirs, {
+    min: 0,
+    max: 60
+}, 'Night Lights by Year');

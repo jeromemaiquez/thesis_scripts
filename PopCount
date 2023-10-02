@@ -1,0 +1,113 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var popCount = ee.Image("users/jeromemaiquez/clipped_pop_count"),
+    popBorder = ee.FeatureCollection("users/jeromemaiquez/clipped_pop_count_border"),
+    PagbilaoUnion = ee.FeatureCollection("users/jeromemaiquez/Pagbilao_Border_Bay"),
+    PagbilaoBorder = ee.FeatureCollection("users/jeromemaiquez/PagbilaoBorder");
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+  // Add original image to map
+Map.addLayer(popCount, {min: -0.75, max: 8.0, palette: ['black', 'white']}, 'Low-Res Pop. Count');
+Map.centerObject(popCount);
+
+  // Find resolution of original image
+var popBand = popCount.select('b1');
+var oldRes = popBand.projection().nominalScale();
+print('Original Resolution', oldRes);
+
+  // Resampling image to 30m/pixel
+var popBandResampled = popBand.resample('bilinear')
+                       .reproject({
+                         crs: popBand.projection(),
+                         scale: 30
+                       });
+  
+  // Confirm resolution of resampled image                     
+var newRes = popBandResampled.projection().nominalScale();
+print('New Resolution', newRes);
+
+  // Add resampled image to map
+// var popBandResampled = popBandResampled.unmask().clip(PagbilaoBorder); 
+Map.addLayer(popBandResampled, {min: -0.75, max: 8.0, palette: ['black', 'white']}, 'Hi-Res Pop. Count');
+
+  // Sample Pop Count raster for Interpolation
+var popSample = popBandResampled.sample({
+  region: popBorder,
+  scale: 30,
+  numPixels: 500,
+  geometries: true
+});
+
+  // Combine mean & stdev reducers for efficiency
+var combinedReducer = ee.Reducer.mean().combine({
+  reducer2: ee.Reducer.stdDev(),
+  sharedInputs: true
+});
+
+  // Estimate global mean & stdev from the points
+var stats = popSample.reduceColumns({
+  reducer: combinedReducer,
+  selectors: ['b1']
+});
+
+  // Perform the interpolation, valid to 600m
+  // Convert to float-32, assign value = 0 to ocean pixels
+  // then clip to PagbilaoUnion bounding box + 50m buffer for export
+  // clip to PagbilaoUnion in QGIS to prevent errors
+var interpolated = popSample.inverseDistance({
+  range: 1200,
+  propertyName: 'b1',
+  mean: stats.get('mean'),
+  stdDev: stats.get('stdDev'),
+  gamma: 1.0
+}).float()// .clip(PagbilaoBorder)
+.unmask()
+.clip(PagbilaoUnion.geometry().bounds().buffer(50));
+
+  // Confirm resolution of interpolated image                     
+var interRes = interpolated.projection().nominalScale();
+print('Interpolated Resolution', interRes);
+
+  // Add interpolated image to map
+Map.addLayer(interpolated, {min: -0.75, max: 8.0, palette: ['black', 'white']}, 'Filled-in Pop. Count');
+
+  // Compare histograms of orig. vs. interpolated pop-count
+  // to confirm statistical insignificance of discrepancy
+var origPopSample = popCount.sample({
+  region: popBorder,
+  scale: 30,
+  numPixels: 100
+});
+
+var interPopSample = interpolated.sample({
+  region: PagbilaoBorder,
+  scale: 30,
+  numPixels: 100
+});
+
+var compare = ee.Reducer.mean().combine({
+  reducer2: ee.Reducer.variance(),
+  sharedInputs: true
+});
+
+var origPopStats = origPopSample.reduceColumns({
+  reducer: compare,
+  selectors: ['b1']
+});
+
+var interPopStats = interPopSample.reduceColumns({
+  reducer: compare,
+  selectors: ['b1']
+});
+
+print("Orig Mean & Variance: ", origPopStats);
+print("Interp Mean & Variance: ", interPopStats);
+
+  // exports pop. density raster of Pagbilao
+Export.image.toDrive({
+  image: interpolated,
+  description: 'NewPagbilaoPopCount',
+  folder: 'Thesis Trial Files',
+  scale: 30,
+  region: PagbilaoUnion,
+  crs: 'EPSG: 32651',
+  maxPixels: 1e9
+});

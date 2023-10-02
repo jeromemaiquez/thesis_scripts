@@ -1,0 +1,25 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var elev = ee.Image("USGS/SRTMGL1_003"),
+    PagbilaoUnion = ee.FeatureCollection("users/jeromemaiquez/Pagbilao_Border_Bay"),
+    PagbilaoBorder = ee.FeatureCollection("users/jeromemaiquez/PagbilaoBorder");
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+  // import USGS SRTM --> clip --> display on map
+var PagbilaoElev = elev.clip(PagbilaoUnion.geometry().buffer(100)).clamp(0, 430);
+Map.centerObject(PagbilaoElev);
+Map.addLayer(PagbilaoElev, {min: 0, max: 430}, 'Pagbilao Elevation');
+  // calculate slope from elev --> display on map
+var PagbilaoSlope = ee.Terrain.slope(PagbilaoElev);
+Map.addLayer(PagbilaoSlope, {}, 'Pagbilao Slope - Degrees');
+  // convert slope degrees to radians --> display on map
+var PagbilaoSlopeRads = PagbilaoSlope.divide(180).multiply(Math.PI);
+Map.addLayer(PagbilaoSlopeRads, {}, 'Pagbilao Slope - Radians');
+
+Export.image.toDrive({
+  image: PagbilaoElev, 
+  description: 'PagbilaoElev', 
+  folder: 'Inputs for Myka', 
+  region: PagbilaoBorder.geometry().buffer(100), 
+  scale: 30, 
+  crs: 'EPSG: 32651', 
+  maxPixels: 1e6
+});

@@ -1,0 +1,125 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var Gesu = /* color: #d63000 */ee.Geometry.Point([121.07996024734621, 14.640059764769752]),
+    AteneoCampus = 
+    /* color: #fff1e3 */
+    /* shown: false */
+    ee.Geometry.Polygon(
+        [[[121.07474603302128, 14.646683097974154],
+          [121.07496060974248, 14.637008551099907],
+          [121.08191289550908, 14.636883983336045],
+          [121.08315744049199, 14.647181346341455]]]),
+    Siquijor = 
+    /* color: #98ff00 */
+    /* shown: false */
+    /* displayProperties: [
+      {
+        "type": "rectangle"
+      }
+    ] */
+    ee.Geometry.Polygon(
+        [[[123.43932305246078, 9.31131837678655],
+          [123.43932305246078, 9.072723114847335],
+          [123.72222100167953, 9.072723114847335],
+          [123.72222100167953, 9.31131837678655]]], null, false),
+    imageVisParam = {"opacity":1,"bands":["B4","B3","B2"],"min":69,"max":11257,"gamma":1},
+    Benguet = ee.FeatureCollection("users/jeromemaiquez/Benguet");
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+//// IMAGE CENTERING ////
+
+//this will center the map around an object (i.e. Gesu point)
+//the number that follows represents zoom magnitude/extent
+//smaller = zoomed out; larger = zoomed in (only up to ~27)
+Map.centerObject(Benguet, 10);
+
+//to center around coordinates, use Map.setCenter(x, y, zoom)
+//Map.setCenter(121.08, 14.64, 15);
+
+//// IMAGE COLLECTION ////
+
+//image collections: satellite datasets composed of images at diff. times & locations
+//"COPERNICUS/S2_SR" is the ImageCollection ID for the Copernicus program's Sentinel 2 satellite
+//this ID can be manually searched by putting "Sentinel 2" in search bar, 
+//and choosing Sentinel-2 MSI: Multi-Spectral Instrument, Level-2A
+var Sentinel2 = ee.ImageCollection("COPERNICUS/S2_SR");
+
+//// IMAGE FILTERING (cloud masking) ////
+
+//this filters Sentinel2 data using 3 criteria
+//1: cloudy pixel percentage (20 is acceptable double value)
+//2: date (year-month-date) (start to end)
+//3: bounds(extent): image that includes Gesu point
+var filtered = Sentinel2
+  .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 5))
+  .filter(ee.Filter.date('2021-01-01', '2021-12-31'))
+  .filter(ee.Filter.bounds(Benguet))
+  .map(function(image){return image.clip(Benguet)});
+ 
+ 
+//// IMAGE COMPOSITING //// 
+//.mean() fxn reduces an img collection by calculating mean of all values per pixel  
+var medianComposite = filtered.median()
+
+//shows number of images in collection that fit criteria
+//print(filtered.size());
+
+//shows all info re: filtered image collection
+//print(filtered);
+
+//defines NIR-R-G viz parameters
+// NIR-R-G emphasizes vegetation health
+// var nirrgVis = {
+//   min: 0.0,
+//   max: 3000,
+//   bands: ['B8', 'B3', 'B2'],
+// };
+// Map.addLayer(medianComposite, nirrgVis, 'Median Composite');
+
+//defines visualization parameters of map layer to be retrieved
+//bands 4 (red), 3 (green), and 2 (blue)
+// var rgbVis = {
+//   min: 0.0,
+//   max: 3000,
+//   bands: ['B4', 'B3', 'B2'],
+// };
+
+//creates image variable defined by median composite and band viz variable
+//var visualizedNIRRG = medianComposite.visualize(nirrgVis);
+
+//adds RGB layer onto mapping interface
+//3 parameters: filtered image collection, bands retrieved, caption of layer
+//Map.addLayer(medianComposite, nirrgVis, 'Filtered NIR-R-G');
+
+// var swir1nirb = {
+//   min: 0.0,
+//   max: 3000,
+//   bands: ['B11', 'B8', 'B2'],
+// };
+// Map.addLayer(medianComposite, swir1nirb, 'Median Composite')
+
+// Export.image.toDrive({
+//   image: visualizedNIRRG,
+//   description: 'Sentinel2_Benguet2019VisualizedNIRRG',
+//   folder: 'GEE Exercises',
+//   scale: 20,
+//   region: Benguet,
+//   crs: 'EPSG: 32651',
+//   maxPixels: 1e9
+// });
+
+////////////////////////////////
+//// CALCULATING RS INDICES ////
+////////////////////////////////
+
+// var ndvi_exp = medianComposite.expression(
+//   '(NIR-RED)/(NIR+RED)', {
+//     'NIR': medianComposite.select('B8'),
+//     'RED': medianComposite.select('B4'),
+// }).rename('ndvi_exp');
+//Map.addLayer(ndvi_exp, {min: -1.0, max: 1.0, palette: ['black', 'green']}, 'NDVI');
+
+// var mndwi_exp = medianComposite.normalizedDifference(['B3', 'B11']).rename(['mndwi']);
+// Map.addLayer(mndwi_exp, {min: -1.0, max: 1.0, palette: ['black', 'blue']}, 'MNDWI');
+
+var mndbi_exp = medianComposite.normalizedDifference(['B12', 'B2']).rename(['mndbi']);
+
+Map.addLayer(mndbi_exp, {min: -1.0, max: 1.0, palette: ['black', 'yellow']}, 'MNDBI');

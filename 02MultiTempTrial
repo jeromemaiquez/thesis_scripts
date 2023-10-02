@@ -1,0 +1,172 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var PagbilaoUnion = ee.FeatureCollection("users/jeromemaiquez/Pagbilao_Border_Bay");
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+////****Part 1: PRE-PROCESSING IMAGERY
+/////////////////////////////////////////////
+
+  // Insert Landsat Image Collection and filter 
+  // by area using imported Pagbilao shapefile
+var image = ee.ImageCollection('LANDSAT/LE07/C02/T1_L2')
+  .filterBounds(PagbilaoUnion)
+  .filterDate('2000-01-01', '2006-12-31');
+  // Center map to Pagbilao shapefile    
+Map.centerObject(PagbilaoUnion);
+
+  // A function that scales and masks Landsat 6 (C2) surface reflectance images.
+function prepSrL7(image) {
+   // Develop masks for unwanted pixels (fill, cloud, cloud shadow).
+  var qaMask = image.select('QA_PIXEL').bitwiseAnd(parseInt('11111', 2)).eq(0);
+  var saturationMask = image.select('QA_RADSAT').eq(0);
+
+  // Apply the scaling factors to the appropriate bands.
+  var getFactorImg = function(factorNames) {
+    var factorList = image.toDictionary().select(factorNames).values();
+    return ee.Image.constant(factorList);
+  };
+  var scaleImg = getFactorImg([
+    'REFLECTANCE_MULT_BAND_.|TEMPERATURE_MULT_BAND_ST_B6']);
+  var offsetImg = getFactorImg([
+    'REFLECTANCE_ADD_BAND_.|TEMPERATURE_ADD_BAND_ST_B6']);
+  var scaled = image.select('SR_B.|ST_B6').multiply(scaleImg).add(offsetImg);
+
+  // Replace original bands with scaled bands and apply masks.
+  return image.addBands(scaled, null, true)
+    .updateMask(qaMask).updateMask(saturationMask)
+    .select("SR_B[0-5]*", "SR_B7", "ST_B6");
+}
+
+var filtered = image
+  .map(prepSrL7);
+  
+////****PART 2: MULTI-TEMPORAL COMPOSITES
+///////////////////////////////////////////////
+
+  // Divide into 4-month periods
+  // 1) jan-apr, 2) may-aug, 3) sep-dec
+var cropCalendar = ee.List([[1,4], [5,8], [9,12]]);
+
+  // Create different composites per period
+var createSznComposite = function(months){
+  var startMonth = ee.List(months).get(0);
+  var endMonth = ee.List(months).get(1);
+  var monthFilter = ee.Filter.calendarRange(startMonth, endMonth, 'month');
+  var sznFiltered = filtered.filter(monthFilter);
+  var composite = sznFiltered.median();
+  return composite.select("SR_B[0-5]*", "ST_B6", "SR_B7").clip(PagbilaoUnion);
+};
+
+var compositeList = cropCalendar.map(createSznComposite);
+
+var janApr = ee.Image(compositeList.get(0));
+var mayAug = ee.Image(compositeList.get(1));
+var sepDec = ee.Image(compositeList.get(2));
+
+  // Visualize all composites w/ RGB
+var vizParams = {bands: ['SR_B3', 'SR_B2', 'SR_B1'], min: 0.008, max: 0.102, gamma: [0.95, 1, 1.1]};
+Map.addLayer(janApr, vizParams, 'Jan to Apr', 0);
+Map.addLayer(mayAug, vizParams, 'May to Aug', 0);
+Map.addLayer(sepDec, vizParams, 'Sep to Dec', 0);
+
+  // Create stacked image with composite from all periods
+  // Ideally to capture crop phenology for classifier
+var allSzns = janApr.addBands(mayAug).addBands(sepDec);
+print("All-Season Composite: ", allSzns);
+
+  // Function to normalize image (pixel values between 0 and 1)
+  // Formula is (x - xmin) / (xmax - xmin)
+  // ML algorithms work best when features have same range
+function normalize(image){
+  var bandNames = image.bandNames();
+  
+    // Compute min and max of image
+  var minDict = image.reduceRegion({
+    reducer: ee.Reducer.min(),
+    geometry: PagbilaoUnion,
+    scale: 30,
+    maxPixels: 1e9,
+    bestEffort: true,
+    tileScale: 16
+  });
+  
+  var maxDict = image.reduceRegion({
+    reducer: ee.Reducer.max(),
+    geometry: PagbilaoUnion,
+    scale: 30,
+    maxPixels: 1e9,
+    bestEffort: true,
+    tileScale: 16
+  });
+  
+  var mins = ee.Image.constant(minDict.values(bandNames));
+  var maxs = ee.Image.constant(maxDict.values(bandNames));
+  
+  var normalized = image.subtract(mins).divide(maxs.subtract(mins));
+  return normalized;
+}
+
+var composite = normalize(allSzns);
+
+////**** Part 3: UNSUPERVISED CLUSTERING
+////////////////////////////////////////////////
+
+  // Create training dataset
+var unsupTrain = composite
+  .sample({
+    region: PagbilaoUnion,
+    scale: 30,
+    numPixels: 1000
+  });
+
+  // Instantiate the clusterer and train it
+var clusterer = ee.Clusterer.wekaKMeans(9).train(unsupTrain);
+
+  // Cluster the input using trained clusterer
+var result = composite.cluster(clusterer);
+print("Cluster Results: ", "result", result.getInfo());
+
+  // Display the clusters with random colors
+Map.addLayer(result.clip(PagbilaoUnion).randomVisualizer(), {}, 'Unsuperv. Clusters Pagbilao 2000', 0);
+
+////**** Part 4: Spectral Signature Chart
+////////////////////////////////////////////
+
+  // Define thresholds
+var clusters = result.select('cluster')
+  .eq(0).add(result.eq(1)).add(result.eq(2))
+  .add(result.eq(3)).add(result.eq(4)).add(result.eq(5)).add(result.eq(6)).add(result.eq(7)).add(result.eq(8));
+
+  // Convert clusters into vectors
+var clusterVectors = clusters.addBands(result).reduceToVectors({
+  geometry: PagbilaoUnion,
+  crs: result.projection(),
+  scale: 30,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'cluster',
+  reducer: ee.Reducer.mean()
+});
+
+  // Make display image for cluster vectors
+var display = ee.Image(0).updateMask(0).paint(clusterVectors, '000000', 3);
+Map.addLayer(display, {palette: '000000'}, 'vectors');
+
+//   // Sample Jan-Apr composite from random points
+// var sample = result.sample({
+//   region: PagbilaoUnion,
+//   geometries: true,
+//   scale: 30,
+//   numPixels: 200
+// });
+
+// print(sample.first());
+
+  // Create chart
+var chart = ui.Chart.image.regions({
+  image: janApr.select(janApr.bandNames().filter(ee.Filter.stringStartsWith('item', 'ST_B6').not())),
+  regions: clusterVectors,
+  reducer: ee.Reducer.mean(),
+  scale: 30,
+  seriesProperty: 'cluster'
+})/*.setSeriesNames(['d-pink','green','orange','maroon','black','l-pink','brown','blue','unknown'])*/;
+
+print(chart);

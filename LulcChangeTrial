@@ -1,0 +1,253 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var pagbilao = ee.FeatureCollection("users/jeromemaiquez/Pagbilao_Border_Bay"),
+    l8 = ee.ImageCollection("LANDSAT/LC08/C02/T1_L2"),
+    newfc = ee.FeatureCollection("users/jeromemaiquez/LulcChangePts"),
+    srtm = ee.Image("USGS/SRTMGL1_003");
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+//// LULC CLASSIFICATION & PREDICTION
+//// FOR 2015, 2020, 2025, AND 2030
+//// GOALS:
+//// 1: COMPOSITES PER 3-MONTH PERIOD [DONE]
+//// 2: SUPERVISED CLASSIFICATION 2020 [DONE]
+//// 3: APPLY RF MODEL TO 2015 [DONE]
+//// 4: PREDICT 2025 & 2030 LULC [DONE]
+//// 5: ADD MORE PREDICTOR VARIABLES []]
+////////////////////////////////////////////
+////////////////////////////////////////////
+
+//// PART 1: CREATE COMPOSITES
+////////////////////////////////////////////
+
+  // List of year of image to use
+var yearList = [2015, 2020];
+// var sznList = ee.List([[1,4], [5,8], [9,12]]);
+var sznList = ee.List([2.5, 6.5, 10.5]);
+
+  // Create an image per season per year
+var image = yearList.map(function(year){
+  return ee.ImageCollection.fromImages(sznList.map(function(months){
+    var startMonth = ee.Number(months).subtract(1.5);
+    var endMonth = ee.Number(months).add(1.5);
+    return l8.filter(ee.Filter.calendarRange(year-2, year+2, 'year'))
+             .filter(ee.Filter.calendarRange(startMonth, endMonth, 'month'))
+             .map(cloudMask).median()
+             .select("SR_B[2-7]*", "ST_B10").clip(pagbilao)
+             .set('startMonth', startMonth, 'endMonth', endMonth, 'year', year);
+  }));
+});
+
+print(image);
+
+  // Decompose image collection into list of images
+function decomposeList(list){
+  return ee.ImageCollection(list).toList(3);
+}
+var imageList = ee.List(image).map(decomposeList).flatten();
+
+  // Set system id & system index according to year and month
+function renameImgs(img1){
+  var img = ee.Image(img1);
+  var value = ee.Number(img.get('year')).format('%04d')
+          .cat('_').cat(ee.Number(img.get('startMonth')).format('%02d'))
+          .cat('_').cat(ee.Number(img.get('endMonth')).format('%02d'));
+  return ee.Image(img.set('system:index', value, 'system:id', value));
+}
+var imageListFinal = imageList.map(renameImgs);
+
+//   // Convert from list to image collection
+// var imageCollection = ee.ImageCollection(imageListFinal);
+// print(imageCollection);
+
+var janApr15 = ee.Image(imageListFinal.get(0));
+var mayAug15 = ee.Image(imageListFinal.get(1));
+var sepDec15 = ee.Image(imageListFinal.get(2));
+var janApr20 = ee.Image(imageListFinal.get(3));
+var mayAug20 = ee.Image(imageListFinal.get(4));
+var sepDec20 = ee.Image(imageListFinal.get(5));
+
+  // Display 2022 images to build RF model
+var vizParams = {bands: ['SR_B4', 'SR_B3', 'SR_B2'], min: 0.730, max: 1.152};
+Map.addLayer(janApr15, vizParams, 'Jan to Apr 2015', 0);
+Map.addLayer(mayAug15, vizParams, 'May to Aug 2015', 0);
+Map.addLayer(sepDec15, vizParams, 'Sep to Dec 2015', 0);
+Map.addLayer(janApr20, vizParams, 'Jan to Apr 2020', 0);
+Map.addLayer(mayAug20, vizParams, 'May to Aug 2020', 0);
+Map.addLayer(sepDec20, vizParams, 'Sep to Dec 2020', 0);
+
+function cloudMask(image){
+  var cloudShadowBitMask = 1 << 4;
+  var cloudsBitMask = 1 << 3;
+  
+  var qa = image.select('QA_PIXEL');
+  
+  var mask = qa.bitwiseAnd(cloudShadowBitMask).eq(0)
+    .and(qa.bitwiseAnd(cloudsBitMask).eq(0));
+    
+  return image.updateMask(mask).divide(10000)
+    .select("SR_B[2-9]*", "ST_B10")
+    .copyProperties(image, ["system:time_start"]);
+}
+
+//// PART 2: TRAIN RF MODEL FOR 2020
+///////////////////////////////////////////
+
+var allSzns15 = janApr15.addBands(mayAug15).addBands(sepDec15)
+                .set('year', 2015, 'image', allSzns15);
+var allSzns20 = janApr20.addBands(mayAug20).addBands(sepDec20)
+                .set('year', 2020, 'image', allSzns20);
+
+  // Overlay points on composite to make training data
+var points = allSzns20.sampleRegions({
+  collection: newfc,
+  properties: ['landcover'],
+  scale: 30
+}).randomColumn();
+
+  // Randomly split samples to set aside for validation
+  // using 'random' column. 70% training, 30% testing
+var split = 0.7;
+var training = points.filter(ee.Filter.lt('random', split));
+var testing = points.filter(ee.Filter.gte('random', split));
+
+  // Run the RF model using 300 trees and 5 randomly selected predictors per split ("(300, 5)")
+  // Train using bands and land cover property, which is pulled from training points
+var classifier = ee.Classifier.smileRandomForest(300, 5).train({
+  features: training,
+  classProperty: 'landcover',
+  inputProperties: allSzns20.bandNames()
+});
+
+  // Accuracy assessment
+var validation = testing.classify(classifier);
+var testAccuracy = validation.errorMatrix('landcover', 'classification');
+print('Validation Error Matrix RF: ', testAccuracy);
+print('Validation Overall Accuracy RF: ', testAccuracy.accuracy());
+print("Consumer's Accuracy RF: ", testAccuracy.consumersAccuracy());
+print("Producer's Accuracy RF: ", testAccuracy.producersAccuracy());
+print("F1 Score: ", testAccuracy.fscore());
+var kappa1 = testAccuracy.kappa();
+print('Validation Kappa', kappa1);
+
+//// PART 3: APPLY RF MODEL TO 2015 & 2020
+///////////////////////////////////////////
+
+  // Put land cover indices in a list (?)
+var landcoverValues = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+
+  // Apply RF model to 2015 & 2020
+var lulc15 = allSzns15.classify(classifier).toByte()
+             .reduceNeighborhood(ee.Reducer.mode(), ee.Kernel.circle(1));
+var lulc20 = allSzns20.classify(classifier).toByte()
+             .reduceNeighborhood(ee.Reducer.mode(), ee.Kernel.circle(1));
+  
+  // Show the results 
+
+var palette = 
+'<RasterSymbolizer>' +
+' <ColorMap  type="intervals">' +
+    '<ColorMapEntry color="#8F00FF" quantity="0" label="Mangroves"/>' +
+    '<ColorMapEntry color="#006400" quantity="1" label="Forest"/>' +
+    '<ColorMapEntry color="#FF0000" quantity="2" label="Built-up"/>' +
+    '<ColorMapEntry color="#FFFFE0" quantity="3" label="Annual Crops"/>' +
+    '<ColorMapEntry color="#000000" quantity="4" label="Aquaculture"/>' +
+    '<ColorMapEntry color="#FFB6C1" quantity="5" label="Shrubland"/>' +
+    '<ColorMapEntry color="#800000" quantity="6" label="Grassland"/>' +
+    '<ColorMapEntry color="#00FFFF" quantity="7" label="Water"/>' +
+    '<ColorMapEntry color="#FFFF00" quantity="8" label="Perennial Crops"/>' +
+  '</ColorMap>' +
+'</RasterSymbolizer>';
+
+Map.addLayer(lulc15.sldStyle(palette), {}, 'LULC 2015');
+Map.addLayer(lulc20.sldStyle(palette), {}, 'LULC 2020');
+
+//// PART 4: CREATE LULC CHANGE MAP
+///////////////////////////////////////////
+
+  // Put land cover in a list
+var lulcList = [
+  {year: 2015, image: lulc15},
+  {year: 2020, image: lulc20}
+];
+var names = ['Mangroves', 'Forest', 'Built-up', 'Annual Crops', 'Aquaculture', 'Shrubland', 'Grassland', 'Water', 'Perennial Crops'];
+var palette = ['8F00FF', '006400', 'FF0000', 'FFFFE0', '000000', 'FFB6C1', '800000', '00FFFF', 'FFFF00'];
+
+  // Land cover dictionary for visualization
+var lulcDict = {
+  'LULC_class_palette': palette,
+  'LULC_class_values': landcoverValues,
+  'LULC_class_names': names
+};
+
+  // Create land cover change map
+var changeValues = [];
+var changeNames = [];
+var changeMap = ee.Image(0);
+landcoverValues.map(function(value1, index1){
+  landcoverValues.map(function(value2, index2){
+    var changeValue = value1 * 1e2 + value2;
+    changeValues.push(changeValue);
+    
+    var changeName = names[index1] + ' -> ' + names[index2];
+    changeNames.push(changeName);
+    
+    changeMap = changeMap.where(lulcList[0].image.eq(value1).and(lulcList[1].image.eq(value2)), changeValue);
+  });
+});
+
+  // Show the change map
+changeMap = changeMap.selfMask();
+Map.addLayer(changeMap, {min: 0, max: 808, palette: palette }, 'LULC Change Map', 0);
+
+  // Print the change dictionary
+var changeDict = ee.Dictionary.fromLists(changeValues.map(function(value){ return String(value) }), changeNames);
+print('Land cover change values', changeDict);
+
+// Create images with variables to predict land cover change
+var variables = ee.Image([
+  lulc15.rename('start'),
+  lulc20.rename('end'),
+  changeMap.rename('transition'),
+  srtm.clip(pagbilao).rename('elevation'),
+  ee.Image(2020).multiply(lulc15.neq(lulc20)).rename('year')
+]);
+
+// Property names for prediction
+var propNames = ['start', 'transition', 'elevation', 'year'];
+
+// Propert names to predict
+var predictName = 'end';
+
+// Sample image
+var sample = variables.stratifiedSample({
+  numPoints: 3000,
+  classBand: 'transition', 
+  scale: 30,
+  region: pagbilao
+}).randomColumn();
+
+  // Split training & testing data
+var split2 = 0.7;
+var training2 = sample.filter(ee.Filter.lt('random', split));
+var testing2 = sample.filter(ee.Filter.gte('random', split));
+
+  // Build RF model for prediction
+var predictor = ee.Classifier.smileRandomForest(300).train(training2, predictName, propNames);
+
+  // Test model accuracy
+var cm = testing2.classify(predictor, 'prediction').errorMatrix('end', 'prediction');
+print('Confusion matrix', cm, 'Accuracy', cm.accuracy(), 'Kappa', cm.kappa());
+
+  // Variables for predict for year 2025
+var variables25 = ee.Image([
+  lulc20.rename('start'),
+  changeMap.rename('transition'),
+  srtm.clip(pagbilao).rename('elevation'),
+  ee.Image(2025).multiply(lulc20.neq(lulc15)).rename('year')
+]);
+
+// Apply the model for the variables for 2025
+var lulc25 = variables25.classify(predictor, 'LULC').set(lulcDict);
+Map.addLayer(lulc25, {}, 'LULC 2025 Prediction');
+
+// Add lulc 2025 to LULC list
+lulcList.push({ year: 2025, image: lulc25 });

@@ -1,0 +1,169 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var PagbilaoBorder = ee.FeatureCollection("users/jeromemaiquez/PagbilaoBorder"),
+    PagbilaoUnion = ee.FeatureCollection("users/jeromemaiquez/Pagbilao_Border_Bay");
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+////***** Part 1: Adding imagery, filtering to area and date range, 
+////***** masking out clouds, and making a composite
+/////////////////////////////////////////////////////////////////////
+
+  // Insert Landsat Image Collection and filter 
+  // by area using imported Pagbilao shapefile
+var image = ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')
+  .filterBounds(PagbilaoUnion);
+    
+Map.centerObject(PagbilaoUnion);
+    
+  // Function to cloud mask from QA_PIXEL band of Landsat 8 SR data
+  // Bits 3 and 4 are cloud shadow and cloud, respectively
+function maskL8sr(image) {
+  var cloudShadowBitMask = 1 << 4;
+  var cloudsBitMask = 1 << 3;
+  
+  var qa = image.select('QA_PIXEL');
+  
+  var mask = qa.bitwiseAnd(cloudShadowBitMask).eq(0)
+    .and(qa.bitwiseAnd(cloudsBitMask).eq(0));
+    
+  return image.updateMask(mask).divide(10000)
+    .select("SR_B[1-9]*", "ST_B10")
+    .copyProperties(image, ["system:time_start"]);
+}  
+
+//   // Filter imagery for 2021 and 2022 harvest seasons
+//   // Create joint filter and apply it to Image Collection
+// var ani22 = ee.Filter.date('2022-04-01', '2022-06-01');
+// var ani21= ee.Filter.date('2021-04-01', '2021-06-01');
+
+// var AniFilter = ee.Filter.or(ani22, ani21);
+
+// var allAni = image.filter(AniFilter);
+
+  // Make a composite: apply cloud mask function,
+  // use the median reducer, and clip composite to AOI
+var composite = image
+              .filterDate('2021-01-01', '2022-10-31')
+              .map(maskL8sr)
+              .median()
+              .clip(PagbilaoUnion);
+
+  // Display the composite
+Map.addLayer(composite, {bands: ['SR_B4', 'SR_B3', 'SR_B2'], min: 0.5, max: 2}, 'Pagbilao Color Image 2022', 0);
+
+////***** Part 2: Adding spectral indices and elevation
+////////////////////////////////////////////////////////
+
+   // Display other band combinations
+Map.addLayer(composite, {bands: ['SR_B6', 'SR_B5', 'SR_B4'], min: 0.5, max: 2}, 'Pagbilao Agriculture', 0);
+Map.addLayer(composite, {bands: ['SR_B5', 'SR_B4', 'SR_B3'], min: 0.5, max: 2}, 'Pagbilao Vegetation', 0);
+Map.addLayer(composite, {bands: ['SR_B7', 'SR_B5', 'SR_B4'], min: 0.5, max: 2}, 'Pagbilao SWIR False Color', 0);
+// Map.addLayer(composite, {bands: ['SR_B5', 'SR_B6', 'SR_B4'], min: 0.5, max: 2}, 'Pagbilao Land/Water', 0);
+// Map.addLayer(composite, {bands: ['SR_B4', 'SR_B3', 'SR_B1'], min: 0.5, max: 2}, 'Pagbilao Bathymetry', 0);
+
+  // Naming bands to calculate RS indices
+var green = composite.select('SR_B3');
+var red = composite.select('SR_B4');
+var nir = composite.select('SR_B5');
+var swir = composite.select('SR_B6');
+var thermal = composite.select('ST_B10');
+var L = 0.5; //
+
+  // Computing RS indices
+var mvi = nir.subtract(green).divide(swir.subtract(green)).rename('mvi');
+var mndwi = green.subtract(swir).divide(green.add(swir)).rename('mndwi');
+var ndvi = nir.subtract(red).divide(nir.add(red)).rename('ndvi');
+var savi = nir.subtract(red).divide(nir.add(red).add(0.5)).multiply(1.5).rename('savi');
+var ndbi = swir.subtract(nir).divide(swir.add(nir)).rename('ndbi');
+var bui = ndbi.subtract(ndvi).rename('bui');
+
+  // Simbologia comun para los indices
+var Simbologia = {max: 1, min: 0, // IMPORTANTE variar rangos en funcion del indice
+      palette: ['#0000ff', 'DF923D', 'F1B555',
+      'FCD163', '99B718', '74A901', '66A000', '529400', '3E8601', '207401',
+      '056201', '004C00', '023B01', '012E01', '011D01', '011301']};
+  
+  // Adding DEM data from USGS SRTM
+var srtm = ee.Image("USGS/SRTMGL1_003");
+var elevation = srtm.select('elevation').clip(PagbilaoUnion);
+var slope = ee.Terrain.slope(srtm.select('elevation')).rename('slope').clip(PagbilaoUnion);
+
+Map.addLayer(elevation, {min: 0, max: 260, palette: ['black', 'white']}, 'Pagbilao Elevation', 0);
+Map.addLayer(slope, {min:0, max: 3.0, palette: ['green', 'red']}, 'Pagbilao Slope', 0)
+
+  // Adding indices and DEM variables to composite
+var composite = composite
+              .addBands(savi)
+              .addBands(ndbi)
+              .addBands(mndwi)
+              .addBands(mvi)
+              .addBands(elevation)
+              .addBands(slope);
+
+//   // Adding ESA WordlCover 10m to map
+// var landCover = esaWorldCover.first().clip(PagbilaoBorder);
+
+// Map.addLayer(landCover, {bands: ['Map']}, "Landcover");
+
+  // Function to normalize image (pixel values between 0 and 1)
+  // Formula is (x - xmin) / (xmax - xmin)
+  // ML algorithms work best when features have same range
+function normalize(image){
+  var bandNames = image.bandNames();
+  
+    // Compute min and max of image
+  var minDict = image.reduceRegion({
+    reducer: ee.Reducer.min(),
+    geometry: PagbilaoUnion,
+    scale: 30,
+    maxPixels: 1e9,
+    bestEffort: true,
+    tileScale: 16
+  });
+  
+  var maxDict = image.reduceRegion({
+    reducer: ee.Reducer.max(),
+    geometry: PagbilaoUnion,
+    scale: 30,
+    maxPixels: 1e9,
+    bestEffort: true,
+    tileScale: 16
+  });
+  
+  var mins = ee.Image.constant(minDict.values(bandNames));
+  var maxs = ee.Image.constant(maxDict.values(bandNames));
+  
+  var normalized = image.subtract(mins).divide(maxs.subtract(mins));
+  return normalized;
+}
+
+var composite = normalize(composite);
+
+  // Adding RS indices to the map
+Map.addLayer(mvi, Simbologia, 'Pagbilao Bay MVI', 0);
+Map.addLayer(mndwi, {min: 0, max: 1, palette: ['green', 'white', 'blue']}, 'Pagbilao Bay MNDWI', 0);
+// Map.addLayer(ndvi, Simbologia, 'Pagbilao Bay NDVI', 0);
+Map.addLayer(savi, Simbologia, 'Pagbilao Bay SAVI', 0);
+Map.addLayer(thermal, {min: 0, max: 1, palette: ['blue', 'white', 'green']}, 'Pagbilao Bay Surf. Temp.', 0);
+// Map.addLayer(ndbi, {min: -1, maxl: 1, palette: ['green', 'yellow', 'red']}, 'Pagbilao Bay NDBI', 0);
+
+  // Get bands included in composite
+print(composite.bandNames());
+
+////******** Part 3: Unsupervised Clustering
+////////////////////////////////////////////////
+
+  // Create training dataset
+var training = composite.sample({
+  region: PagbilaoUnion,
+  scale: 30,
+  numPixels: 1000
+});
+
+  // Instantiate the clusterer and train it
+var clusterer = ee.Clusterer.wekaKMeans(9).train(training);
+
+  // Cluster the input using trained clusterer
+var result = composite.cluster(clusterer);
+print("result", result.getInfo());
+
+  // Display the clusters with random colors
+Map.addLayer(result.clip(PagbilaoUnion).randomVisualizer(), {}, 'Unsuperv. Clusters Pagbilao 2022', 0);

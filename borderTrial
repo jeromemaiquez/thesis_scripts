@@ -1,0 +1,71 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var PagbilaoBorder = ee.FeatureCollection("users/jeromemaiquez/PagbilaoBorder"),
+    PagbilaoBay = 
+    /* color: #2515d6 */
+    /* shown: false */
+    ee.Geometry.Polygon(
+        [[[121.70612110718187, 13.923264384530734],
+          [121.74114002808031, 13.918265797386988],
+          [121.76860584839281, 13.9214315817951],
+          [121.78869022949632, 13.937426460911007],
+          [121.78611530884203, 13.946256492436023],
+          [121.75761952026781, 13.9774088084668],
+          [121.70989765747484, 13.977575387068365],
+          [121.68432011230882, 13.964415306243612],
+          [121.69015659912523, 13.935093943357503]]]),
+    pmsfrBounds = /* color: #d63000 */ee.Geometry.Polygon(
+        [[[121.7122, 13.98861],
+          [121.7122, 13.96944],
+          [121.7378, 13.96944],
+          [121.7378, 13.98861]]]);
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+//// Goals
+
+// Create Pagbilao shapefile including the bay
+// More water pixels -> MOLUSCE will work?
+
+//// Implementation
+
+  // Convert input features into geometry
+var PagbilaoGeom = PagbilaoBorder.geometry();
+
+  // Confirm element type of PagbilaoGeom
+print(PagbilaoGeom);
+
+  // Unite Pagbilao border & bay polygons
+var PagbilaoUnion = PagbilaoGeom.union(PagbilaoBay);
+
+  // Confirm element type of union
+print('PagbilaoBorder.union', PagbilaoUnion);
+
+Map.addLayer(PagbilaoBorder, {}, 'Pagbilao Border');
+// Map.addLayer(PagbilaoBay, {}, 'Pagbilao Bay');
+Map.addLayer(PagbilaoUnion, {}, 'Pagbilao Border + Bay');
+
+  // Export PagbilaoUnion to GDrive
+var unionFC = ee.FeatureCollection(PagbilaoUnion);
+Export.table.toDrive({
+  collection: unionFC,
+  description: 'Pagbilao_Border_Bay',
+  folder: 'Maxent',
+  fileFormat: 'SHP',
+  maxVertices: 1e9
+});
+
+//// Next Steps
+
+// Import shapefiles for Lucena, Tayabas, Mauban, Atimonan, Padre Burgos
+// Create bounding boxes for Lucena & Padre Burgos
+// Mask out ocean pixels w/in ^^ bounding boxes
+  
+Map.addLayer(pmsfrBounds, {}, 'PMSFR Bounds');
+Map.centerObject(pmsfrBounds, 12);
+
+var pmsfrBounds = ee.FeatureCollection(pmsfrBounds);
+
+Export.table.toAsset({
+  collection: pmsfrBounds,
+  description: 'pmsfrBounds',
+  assetId: 'users/jeromemaiquez/pmsfrBounds',
+  maxVertices: 1e6
+})

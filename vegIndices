@@ -1,0 +1,33 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var PagbilaoBorder = ee.FeatureCollection("users/jeromemaiquez/PagbilaoBorder");
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+// CALCULO DE INDICES DE VEGETACION EN EARTH ENGINE
+// http://www.gisandbeers.com/script-indices-de-vegetacion-google-earth-engine/
+
+// Coleccion Sentinel 2 nivel 2
+var ColeccionSentinel = ee.ImageCollection("COPERNICUS/S2_SR")
+  .filterDate ('2020-03-01' ,'2020-04-30')
+  .filterBounds (PagbilaoBorder)
+  .filterMetadata ('CLOUDY_PIXEL_PERCENTAGE', 'Less_Than', 20);
+var Vegetacion = ee.Image(ColeccionSentinel.mean()).clip(PagbilaoBorder);
+
+// NDVI (Normalized Difference Vegetation Index)
+var NDVI = Vegetacion.expression ('float ((NIR - RED) / (NIR + RED))',{
+    'NIR': Vegetacion.select ('B8'),  
+    'RED': Vegetacion.select ('B4')});
+
+// SAVI (Soil Adjusted Vegetation Index)
+var SAVI = Vegetacion.expression ('float (((NIR - RED) / (NIR + RED + L))* (1+L))',{
+    'L': 0.5, // Cobertura vegetacion 0-1
+    'NIR': Vegetacion.select ('B8'),
+    'RED': Vegetacion.select ('B4')});
+    
+// Simbologia comun para los indices
+var Simbologia = {max: 1, min: 0, // IMPORTANTE variar rangos en funcion del indice
+    palette: ['#0000ff', 'DF923D', 'F1B555',
+    'FCD163', '99B718', '74A901', '66A000', '529400', '3E8601', '207401',
+    '056201', '004C00', '023B01', '012E01', '011D01', '011301']};
+    
+Map.addLayer (NDVI, Simbologia, 'NDVI',0);
+Map.addLayer (SAVI, Simbologia, 'SAVI',0);
+Map.addLayer (Vegetacion, {max: 4000.0, min: 0.0, gamma: 1.0, bands: ['B4','B3','B2']}, 'RGB color natural',0);

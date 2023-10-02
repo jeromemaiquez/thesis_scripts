@@ -1,0 +1,108 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var PagbilaoUnion = ee.FeatureCollection("users/jeromemaiquez/Pagbilao_Border_Bay");
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+/* PART 0: PRE-PROCESSING ALGORITHMS */
+
+  // cloud-masking function
+function maskL8sr(image) {
+  var cloudShadowBitMask = 1 << 4;
+  var cloudsBitMask = 1 << 3;
+  
+  var qa = image.select('QA_PIXEL');
+  
+  var mask = qa.bitwiseAnd(cloudShadowBitMask).eq(0)
+    .and(qa.bitwiseAnd(cloudsBitMask).eq(0));
+    
+  return image.updateMask(mask).divide(10000)
+    .select("SR_B[0-9]*", "ST_B10")
+    .copyProperties(image, ["system:time_start"]);
+}
+
+/* PART 1: IMAGE ACQUISITION */
+
+  // create point geometry for pagbilao
+var pagbilaoPoint = ee.Geometry.Point(121.7358, 14.0211);
+
+  // import Landsat 8 image collection and filter
+  // loc: pagbilao, date: 2020 to 2022
+  // reduce to median to limit cloud cover
+var l8 = ee.ImageCollection(
+    'LANDSAT/LC08/C02/T1_L2')
+    .filterBounds(pagbilaoPoint)
+    .filterDate('2020-01-01', '2022-12-31');
+
+  // print image collection properties
+print('Image Properties:', l8);
+
+  // apply pre-processing algorithms
+  // then reduce to median
+var image = l8
+    .map(maskL8sr)
+    .median();
+    
+  // add image layer to map
+Map.addLayer(image.clip(PagbilaoUnion), {
+    bands: ['SR_B4', 'SR_B3', 'SR_B2'],
+    min: 0.72,
+    max: 1.24
+}, 'Landsat 8 Image', 0);
+    
+/* PART 2: MVI CALCULATION */
+
+  // extract green, NIR, SWIR bands
+var green = image.select('SR_B3');
+var nir = image.select('SR_B5');
+var swir1 = image.select('SR_B6');
+
+  // calculate MVI (mangrove vegetation index)
+  // |NIR-green| / |SWIR1 - green|
+var greenness = nir.subtract(green).abs();
+var moisture = swir1.subtract(green).abs();
+var mvi = greenness.divide(moisture)
+    .rename('MVI');
+
+  // to check output, add mvi layer to map
+Map.addLayer(mvi.clip(PagbilaoUnion), {
+    min: 0,
+    max: 2,
+    palette: ['blue', 'white', 'green']
+}, 'MVI Pagbilao', 0);
+
+/* PART 3: MVI THRESHOLDING */
+
+  // implement optimal threshold for Landsat 8
+  // = 4.6 (Baloloy et al., 2020)
+var mangroves = mvi.gt(4.6)
+    .clip(PagbilaoUnion);
+
+  // add threshold layer to map
+Map.addLayer(mangroves, {
+    min: 0,  // non-mangroves
+    max: 1,  // mangroves
+    palette: ['white', 'green']
+}, 'MVI Threshold', 0);
+
+/* PART 4: MANGROVE MASKING */
+
+  // import USGS SRTM DEM and clip to ROI
+var dem = ee.Image('USGS/SRTMGL1_003')
+    .clip(PagbilaoUnion);
+
+  // where clauses time!
+    // mangroves = 0 --> 0
+    // mangroves = 1 but elevation >= 20 --> 0
+    // mangroves = 1 and elevation < 20 --> 1
+var elevMask = mangroves
+    .where(dem.gte(20), 0)
+    .where(dem.lte(0), 0);
+
+var maskedMangroves = mangroves.updateMask(elevMask);
+
+Map.addLayer(maskedMangroves, {
+    min: 0,  // non-mangroves
+    max: 1,  // mangroves
+    palette: ['white', 'green']
+}, 'Mangrove Cover Pagbilao', 0);
+
+  // expected output: mangrove cover of Pagbilao
+  // with other cover types masked out
